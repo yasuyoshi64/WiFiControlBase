@@ -138,7 +138,9 @@ void Application::wifiConnectFunc(bool isConnect, void* context) {
         sprintf(url, "http://%s/", ipAddress);
         pThis->m_oled.dispQRCode(url);
         pThis->led(0);
-        pThis->m_web.start();   // Webサーバー開始
+        pThis->m_web.start(ipAddress, ROOT);   // Webサーバー開始
+
+        pThis->m_sd_card.fileLists("/document/", fileFunc, pThis);
     }
 }
 
