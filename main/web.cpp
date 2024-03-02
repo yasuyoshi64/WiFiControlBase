@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <regex>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -26,6 +27,10 @@ void WebServer::clear() {
     m_xHandle = NULL;
     m_xQueue = NULL;
     m_server = NULL;
+    for(int i=0; i<m_apiCallbacks.size(); i++) {
+        delete (ST_API_CALLBACK_DATA*)m_apiCallbacks[i];
+    }
+    m_apiCallbacks.clear();
 }
 
 void WebServer::init() {
@@ -91,10 +96,60 @@ void WebServer::webInit() {
 
 // GET "/API" ハンドラ
 esp_err_t WebServer::get_api(httpd_req_t *req) {
-    // WebServer* pThis = (WebServer*)req->user_ctx;
-    const char resp[] = "<h1>Hello World</h1>";
-    httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
+    WebServer* pThis = (WebServer*)req->user_ctx;
+    ESP_LOGI(TAG, "request uri : %s", req->uri);
+    // コールバックを検索/実行
+    bool isCall = false;
+    std::string path = req->uri;
+    std::regex pattern(R"(^.*/API/)");
+    std::regex pattern2(R"(&.*)");
+    path = std::regex_replace(path, pattern, "");
+    path = std::regex_replace(path, pattern2, "");
+    ESP_LOGI(TAG, "API request path=%s", path.c_str());
+    for(int i=0; i<pThis->m_apiCallbacks.size(); i++) {
+        ST_API_CALLBACK_DATA* v = pThis->m_apiCallbacks[i];
+        if (v != NULL) {
+            ESP_LOGI(TAG, "API setting path=%s", v->path.c_str());
+            if (req->method == v->method && path == v->path) {
+                v->callback(req, v->context);
+                isCall = true;
+                break;
+            }
+        }
+    }
+    if (isCall == false) {
+        ESP_LOGI(TAG, "API NOT FOUND");
+        httpd_resp_send_404(req);
+    }
     return ESP_OK;
+}
+
+esp_err_t WebServer::get_api_get(httpd_req_t *req) {
+    return get_api(req);
+}
+
+esp_err_t WebServer::get_api_post(httpd_req_t *req) {
+    return get_api(req);
+}
+
+esp_err_t WebServer::get_api_put(httpd_req_t *req) {
+    return get_api(req);
+}
+
+esp_err_t WebServer::get_api_delete(httpd_req_t *req) {
+    return get_api(req);
+}
+
+esp_err_t WebServer::get_api_head(httpd_req_t *req) {
+    return get_api(req);
+}
+
+esp_err_t WebServer::get_api_options(httpd_req_t *req) {
+    return get_api(req);
+}
+
+esp_err_t WebServer::get_api_patch(httpd_req_t *req) {
+    return get_api(req);
 }
 
 // GET "/*" ハンドラ
@@ -110,28 +165,20 @@ esp_err_t WebServer::get_root(httpd_req_t *req) {
         sprintf(path, "%s%s%s", pThis->m_root.c_str(), docRoot, req->uri);
     }
     ESP_LOGI(TAG, "request path : %s", path);
-    char *buffer;
-    long file_size;
-    size_t result;
+    
     FILE* fd = fopen(path, "rb");
     if (fd != NULL) {
-        fseek(fd, 0, SEEK_END);
-        file_size = ftell(fd);
-        rewind(fd);
-        ESP_LOGI(TAG, "file_size = %ld", file_size);
-        buffer = (char*)heap_caps_malloc(sizeof(char) * file_size, MALLOC_CAP_8BIT);
-        if (buffer != NULL) {
-            result = fread(buffer, 1, file_size, fd);
-            httpd_resp_set_type(req, contentType.c_str());
-            httpd_resp_send(req, buffer, result);
-            heap_caps_free(buffer);
-        } else {
-            ESP_LOGI(TAG, "buffer = NULL");
-            httpd_resp_send_404(req);
+        char* buffer = new char[1000];
+        int ret;
+        httpd_resp_set_type(req, contentType.c_str());
+        while ((ret = fread(buffer, 1, 1000, fd)) > 0) {
+            httpd_resp_send_chunk(req, buffer, ret);
         }
+        httpd_resp_send_chunk(req, NULL, 0);
+        delete[] buffer;
         fclose(fd);
     } else {
-        ESP_LOGI(TAG, "maji NOT FOUND");
+        ESP_LOGI(TAG, "NOT FOUND");
         httpd_resp_send_404(req);
     }
     heap_caps_free(path);
@@ -155,16 +202,31 @@ void WebServer::webStart() {
     conf.uri_match_fn = custom_uri_matcher;
     if (httpd_start(&m_server, &conf) == ESP_OK) {
         // URLマップハンドラ登録 (API)
-        httpd_method_t methods[] = {HTTP_GET, HTTP_POST, HTTP_PUT, HTTP_DELETE, HTTP_HEAD, HTTP_OPTIONS, HTTP_PATCH};
-        for(int i=0; i<sizeof(methods); i++) {
-            httpd_uri_t api = {
-                .uri      = "/API",
-                .method   = methods[i],
-                .handler  = get_api,
-                .user_ctx = this
-            };
-            httpd_register_uri_handler(m_server, &api);
-        }
+        httpd_uri_t api = {
+            .uri      = "/API/*",
+            .user_ctx = this
+        };
+        api.method = HTTP_GET;
+        api.handler = get_api_get;      
+        httpd_register_uri_handler(m_server, &api);
+        api.method = HTTP_POST;
+        api.handler = get_api_post;      
+        httpd_register_uri_handler(m_server, &api);
+        api.method = HTTP_PUT;
+        api.handler = get_api_put;      
+        httpd_register_uri_handler(m_server, &api);
+        api.method = HTTP_DELETE;
+        api.handler = get_api_delete;      
+        httpd_register_uri_handler(m_server, &api);
+        api.method = HTTP_HEAD;
+        api.handler = get_api_head;      
+        httpd_register_uri_handler(m_server, &api);
+        api.method = HTTP_OPTIONS;
+        api.handler = get_api_options;      
+        httpd_register_uri_handler(m_server, &api);
+        api.method = HTTP_PATCH;
+        api.handler = get_api_patch;      
+        httpd_register_uri_handler(m_server, &api);
         // URLマップハンドラ登録 (ワイルドカード)
         httpd_uri_t root = {
             .uri      = "/*",
@@ -182,6 +244,24 @@ void WebServer::webStop() {
     // Webサーバー停止
     httpd_stop(m_server);
     m_server = NULL;
+}
+
+// "/API"のハンドラを登録
+int WebServer::addHandler(httpd_method_t method, const char* path, CallbackWebAPIFunction callback, void* context) {
+    ST_API_CALLBACK_DATA* pCallback = new ST_API_CALLBACK_DATA{
+        method,
+        path,
+        callback,
+        context
+    };
+    m_apiCallbacks.push_back(pCallback);
+    return m_apiCallbacks.size() - 1;
+}
+
+// "/APIのハンドラを削除"
+void WebServer::removeHandler(int handle) {
+    delete (ST_API_CALLBACK_DATA*)m_apiCallbacks[handle];
+    m_apiCallbacks[handle] = NULL;
 }
 
 // URIから拡張子のみを返します

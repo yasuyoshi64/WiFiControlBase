@@ -8,8 +8,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/timers.h"
 #include "nvs_flash.h"
 #include "driver/gpio.h"
+#include "esp_http_server.h"
+#include "cJSON.h"
 #include "esp_log.h"
 
 #include "main.hpp"
@@ -31,6 +34,8 @@ Application::Application() {
     m_LedState = false;
     m_xHandle = NULL;
     m_xQueue = NULL;
+    m_isWiFi = false;
+    m_30sec_off = false;
 }
 
 // 初期化
@@ -42,11 +47,23 @@ void Application::init() {
     gpio_set_direction((gpio_num_t)CONFIG_LED_PIN, GPIO_MODE_OUTPUT);
     led(0);
 
+    // ボタン初期化(GPIO0)
+    gpio_reset_pin((gpio_num_t)0);
+    gpio_set_intr_type((gpio_num_t)0, GPIO_INTR_NEGEDGE);
+    gpio_set_direction((gpio_num_t)0, GPIO_MODE_INPUT);
+    gpio_pulldown_dis((gpio_num_t)0);
+    gpio_pullup_en((gpio_num_t)0);
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add((gpio_num_t)0, btn0HandlerFunc, (void*)this);
+
     // タスク作成
     xTaskCreate(Application::app_task, TAG, configMINIMAL_STACK_SIZE * 2, (void*)this, tskIDLE_PRIORITY, &m_xHandle);
 
     // メッセージキューの初期化
     m_xQueue = xQueueCreate(10, sizeof(AppMessage));
+
+    // LEDコントローラー
+    m_led.init();
 
     // SDカード初期化
     m_sd_card.init(ROOT);
@@ -60,6 +77,8 @@ void Application::init() {
 
     // Webサーバー初期化
     m_web.init();
+    m_web.addHandler(HTTP_GET, "get_led", getLed, this);
+    m_web.addHandler(HTTP_POST, "set_led", setLed, this);
 
     ESP_LOGI(TAG, "Init(E)");
 }
@@ -132,23 +151,68 @@ void Application::dispInitCompFunc(void* context) {
 void Application::wifiConnectFunc(bool isConnect, void* context) {
     Application* pThis = (Application*)context;
     if (isConnect) {
+        pThis->m_30sec_off = pThis->m_isWiFi = true;
         const char* ipAddress = pThis->m_wifi.getIPAddress();
         ESP_LOGI(TAG, "IP Address: %s", ipAddress);
-        char url[256];
-        sprintf(url, "http://%s/", ipAddress);
-        pThis->m_oled.dispQRCode(url);
         pThis->led(0);
         pThis->m_web.start(ipAddress, ROOT);   // Webサーバー開始
 
-        pThis->m_sd_card.fileLists("/document/", fileFunc, pThis);
+        // 30秒後に画面を消灯するためにタイマ設定
+        pThis->timer30secStart();
+
+        // pThis->m_sd_card.fileLists("/document/", fileFunc, pThis);
+    } else {
+        pThis->m_30sec_off = pThis->m_isWiFi = false;
     }
+    AppMessage msg = AppMessage::UpdateDisplay;
+    xQueueSend(pThis->m_xQueue, &msg, portMAX_DELAY);
+}
+
+// 30秒タイマ開始
+void Application::timer30secStart() {
+    TimerHandle_t xTimer = xTimerCreate(
+        "30SecTimer",
+        pdMS_TO_TICKS(30000),
+        pdFALSE,
+        this,
+        timer30secFunc
+    );
+    if (xTimer != NULL)
+        xTimerStart(xTimer, 0);
+}
+
+// 30秒タイマ
+void Application::timer30secFunc(TimerHandle_t xTimer) {
+    Application* pThis = (Application*)pvTimerGetTimerID(xTimer);
+    pThis->m_30sec_off = false;
+    AppMessage msg = AppMessage::UpdateDisplay;
+    xQueueSend(pThis->m_xQueue, &msg, portMAX_DELAY);
+}
+
+// 基盤上のボタン押下ハンドラ (GPIO0)
+void IRAM_ATTR Application::btn0HandlerFunc(void* context) {
+    Application* pThis = (Application*)context;
+    pThis->m_30sec_off = true;
+    pThis->timer30secStart();
+    AppMessage msg = AppMessage::UpdateDisplay;
+    xQueueSend(pThis->m_xQueue, &msg, portMAX_DELAY);
 }
 
 // ディスプレイに現在状態表示
 void Application::updateDisplay() {
     if (!m_oled.isInitialize())
         return;
-    if (m_sd_card.isMount()) {
+    if (m_isWiFi) {
+        if (m_30sec_off) {
+            const char* ipAddress = m_wifi.getIPAddress();
+            char url[256];
+            sprintf(url, "http://%s/", ipAddress);
+            m_oled.dispQRCode(url);
+        } else {
+            // 画面消灯
+            m_oled.dispClear();
+        }
+    } else if (m_sd_card.isMount()) {
         m_oled.dispString("Wi-Fi Connecting");
         led(1);
     } else {
@@ -171,6 +235,67 @@ void Application::wifiConnection() {
 void Application::wifiDisconnection() {
     m_web.stop();
     m_wifi.disconnect();
+}
+
+// WebAPI GET /API/get_led
+void Application::getLed(httpd_req_t *req, void* context) {
+    ESP_LOGI(TAG, "getLed");
+    Application* pThis = (Application*)context;
+    bool* led = pThis->m_led.getLed();
+    char resp[100];
+    sprintf(resp, "{\"led\": [ %s, %s, %s, %s ] }", led[0] ? "true" : "false", led[1] ? "true" : "false", led[2] ? "true" : "false", led[3] ? "true" : "false");
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, resp, strlen(resp));
+}
+
+// WebAPI POST /API/set_led
+// body : 
+//  {
+//      "led": [ true, true, true, true ]
+//  }
+void Application::setLed(httpd_req_t *req, void* context) {
+    ESP_LOGI(TAG, "setLed");
+    Application* pThis = (Application*)context;
+    int ret, remaining = req->content_len;
+    char body[100];
+    if (remaining >= sizeof(body)) {
+        ESP_LOGE(TAG, "oversize request body");
+        httpd_resp_send_500(req);
+        return;
+    }
+    ret = httpd_req_recv(req, body, remaining);
+    if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+        ESP_LOGE(TAG, "timeout");
+        httpd_resp_send_408(req);
+        return;
+    }
+    body[ret] = '\0';
+    ESP_LOGI(TAG, "body : %s", body);
+    cJSON* json = cJSON_Parse(body);
+    if (json == NULL) {
+        ESP_LOGI(TAG, "json null");
+        httpd_resp_send_500(req);
+        return;
+    }
+    cJSON* leds = cJSON_GetObjectItemCaseSensitive(json, "led");
+    if (!cJSON_IsArray(leds)) {
+        ESP_LOGI(TAG, "json format error");
+        httpd_resp_send_500(req);
+        return;
+    }
+    cJSON* led = NULL;
+    bool ledData[4];
+    int i=0;
+    cJSON_ArrayForEach(led, leds) {
+        if (cJSON_IsTrue(led))
+            ledData[i] = true;
+        else
+            ledData[i] = false;
+        i++;
+    }
+    cJSON_Delete(json);
+    pThis->m_led.setLed(ledData);
+    httpd_resp_send(req, NULL, 0);
 }
 
 extern "C" void app_main(void)
