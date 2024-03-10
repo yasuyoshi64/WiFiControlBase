@@ -16,6 +16,7 @@ enum class WebMessage {
     Init,       // 初期化
     Start,      // 開始
     Stop,       // 停止
+    WebSocketSend,       // WebSocket送信
     Quit        // 終了
 };
 
@@ -31,6 +32,13 @@ void WebServer::clear() {
         delete (ST_API_CALLBACK_DATA*)m_apiCallbacks[i];
     }
     m_apiCallbacks.clear();
+    m_webSocketSessions.clear();
+    while(!m_webSocketSendMessages.empty()) {
+        delete[] m_webSocketSendMessages.top();
+        m_webSocketSendMessages.pop();
+    }
+    m_webSocketCallback = NULL;
+    m_webSocketCallbackContext = NULL;
 }
 
 void WebServer::init() {
@@ -78,6 +86,9 @@ void WebServer::task(void* arg) {
                     break;
                 case WebMessage::Stop:          // 停止
                     pThis->webStop();
+                    break;
+                case WebMessage::WebSocketSend: // WebSocket送信
+                    pThis->webSocketSend();
                     break;
                 case WebMessage::Quit:          // 終了
                     loop = false;
@@ -185,6 +196,110 @@ esp_err_t WebServer::get_root(httpd_req_t *req) {
     return ESP_OK;
 }
 
+// GET "/ws" WebSocketハンドラ
+esp_err_t WebServer::websocket_callback(httpd_req_t *req) {
+    WebServer* pThis = (WebServer*)req->user_ctx;
+    if (req->method == HTTP_GET) {
+        // 始めて接続しにくるクライアントはココに一度来る
+        // セッション格納
+        ST_WEBSOCKET_SESSION* pSession = new ST_WEBSOCKET_SESSION {
+            .isActive = true,
+            .req = req
+        };
+        pThis->m_webSocketSessions.push_back(pSession);
+
+        ESP_LOGI(TAG, "Handshake done, the new connection was opened");
+        return ESP_OK;
+    }
+    httpd_ws_frame_t ws_pkt;
+    uint8_t *buf = NULL;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "httpd_ws_recv_frame failed to get frame len with %d", ret);
+        return ret;
+    }
+    // ESP_LOGI(TAG, "frame len is %d", ws_pkt.len);
+    if (ws_pkt.len) {
+        // データ受信
+        buf = (uint8_t*)calloc(1, ws_pkt.len + 1);
+        if (buf == NULL) {
+            ESP_LOGE(TAG, "Failed to calloc memory for buf");
+            return ESP_ERR_NO_MEM;
+        }
+        ws_pkt.payload = buf;
+        ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
+            return ret;
+        }
+        // ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
+    }
+    // ESP_LOGI(TAG, "Packet type: %d", ws_pkt.type);
+    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT && strcmp((char*)ws_pkt.payload, "Trigger async") == 0) {
+        free(buf);
+        return pThis->trigger_async_send(req->handle, req);
+    }
+
+    if (pThis->m_webSocketCallback != NULL) {
+        const char* send = pThis->m_webSocketCallback((const char*)buf, pThis->m_webSocketCallbackContext);
+        if (send != NULL) {
+            // 戻り値がNULL以外なら送信
+            ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+            ws_pkt.payload = (uint8_t*)send;
+            ws_pkt.len = strlen(send);
+            ws_pkt.final = true;
+            ret = httpd_ws_send_frame(req, &ws_pkt);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "httpd_ws_send_frame failed with %d", ret);
+            }
+        }
+    }
+    // 以下はECHOバックするロジック
+    // ret = httpd_ws_send_frame(req, &ws_pkt);
+    // if (ret != ESP_OK) {
+    //     ESP_LOGE(TAG, "httpd_ws_send_frame failed with %d", ret);
+    // }
+
+    free(buf);
+    return ret;
+}
+
+struct async_resp_arg {
+    httpd_handle_t hd;
+    int fd;
+};
+
+esp_err_t WebServer::trigger_async_send(httpd_handle_t handle, httpd_req_t *req) {
+    struct async_resp_arg* resp_arg = (async_resp_arg*)malloc(sizeof(struct async_resp_arg));
+    if (resp_arg == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    resp_arg->hd = req->handle;
+    resp_arg->fd = httpd_req_to_sockfd(req);
+    esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
+    if (ret != ESP_OK) {
+        free(resp_arg);
+    }
+    return ret;
+}
+
+void WebServer::ws_async_send(void *arg) {
+    static const char *data = "Async data";
+    struct async_resp_arg *resp_arg = (async_resp_arg*)arg;
+    httpd_handle_t hd = resp_arg->hd;
+    int fd = resp_arg->fd;
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.payload = (uint8_t*)data;
+    ws_pkt.len = strlen(data);
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+
+    httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+    free(resp_arg);
+}
+
 // URIマッチャー
 bool WebServer::custom_uri_matcher(const char* reference_uri, const char* uri_to_match, size_t match_upto) {
     if (reference_uri[strlen(reference_uri)-1] == '*') {
@@ -227,6 +342,15 @@ void WebServer::webStart() {
         api.method = HTTP_PATCH;
         api.handler = get_api_patch;      
         httpd_register_uri_handler(m_server, &api);
+        // WebScoketハンドラ登録
+        httpd_uri_t ws = {
+            .uri      = "/ws",
+            .method   = HTTP_GET,
+            .handler  = websocket_callback,
+            .user_ctx = this,
+            .is_websocket = true
+        };
+        httpd_register_uri_handler(m_server, &ws);
         // URLマップハンドラ登録 (ワイルドカード)
         httpd_uri_t root = {
             .uri      = "/*",
@@ -246,6 +370,32 @@ void WebServer::webStop() {
     m_server = NULL;
 }
 
+void WebServer::webSocketSend() {
+    while(!m_webSocketSendMessages.empty()) {
+        char* data = m_webSocketSendMessages.top();
+        httpd_ws_frame_t ws_pkt = {
+            .final = true,
+            .type = HTTPD_WS_TYPE_TEXT,
+            .payload = (uint8_t*)data,
+            .len = strlen(data),
+        };
+        for(int i=0; i<m_webSocketSessions.size(); i++) {
+            ST_WEBSOCKET_SESSION* pSession = m_webSocketSessions[0];
+            esp_err_t ret = httpd_ws_send_frame(pSession->req, &ws_pkt);
+            if (ret != ESP_OK) {
+                pSession->isActive = false;
+            }
+        }
+        m_webSocketSessions.erase(std::remove_if(m_webSocketSessions.begin(), m_webSocketSessions.end(), [](ST_WEBSOCKET_SESSION* pSession) {
+            bool isDelete = !pSession->isActive;
+            delete pSession;
+            return isDelete;
+        }), m_webSocketSessions.end());
+        delete[] data;
+        m_webSocketSendMessages.pop();
+    }
+}
+
 // "/API"のハンドラを登録
 int WebServer::addHandler(httpd_method_t method, const char* path, CallbackWebAPIFunction callback, void* context) {
     ST_API_CALLBACK_DATA* pCallback = new ST_API_CALLBACK_DATA{
@@ -262,6 +412,21 @@ int WebServer::addHandler(httpd_method_t method, const char* path, CallbackWebAP
 void WebServer::removeHandler(int handle) {
     delete (ST_API_CALLBACK_DATA*)m_apiCallbacks[handle];
     m_apiCallbacks[handle] = NULL;
+}
+
+// WebSocket用コールバック設定
+void WebServer::setWebSocketHandler(CallbackWebSocketFunction callback, void* context) {
+    m_webSocketCallback = callback;
+    m_webSocketCallbackContext = context;
+}
+
+// WebSocketの接続先にデータ送信
+void WebServer::sendWebSocket(const char* data) {
+    char* buf = new char[strlen(data) + 1];
+    strcpy(buf, data);
+    m_webSocketSendMessages.push(buf);
+    WebMessage msg = WebMessage::WebSocketSend;
+    xQueueSend(m_xQueue, &msg, portMAX_DELAY);
 }
 
 // URIから拡張子のみを返します

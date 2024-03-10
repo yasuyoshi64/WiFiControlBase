@@ -1,3 +1,64 @@
+# settings
+Serial flasher config
+
+	Flash size				4MB
+
+Partition Table
+
+	Patition Table			Single factory app (large), no OTA
+
+WiFiControlBase
+
+	LED GPIO number			5
+
+LED controle conf
+
+	LED1 GPIO number		26
+	LED2 GPIO number		27
+	LED3 GPIO number		32
+	LED4 GPIO number		33
+
+Servo controle conf
+
+	Servo GPIO number		12
+
+SD card PIN configuration
+
+	MOSI GPIO number		17
+	MOSO GPIO number		19
+	CLK GPIO number			18
+	CS GPIO number			16
+	SD card sw GPIO number	4
+
+OLED(SSD1306) PIN configuration
+
+	I2C SDA GPIO number		21
+	I2C SCL GPIO number		22
+
+HTTP Server
+
+	WebSocket server support	TRUE
+
+FAT Filesystem support
+
+	Long filename support	Long filename buffer in heap
+	OEM Code Page			Japanese (DBCS) (CP932)
+
+Color settings
+
+	Color depth.			1: 1 byte per pixel
+
+Font usage
+
+Enable built-in fonts
+
+	Enable UNSCII 8 (Perfect monospace font)	TRUE
+
+3rd Party Libraries
+
+	QR code library			TRUE
+
+
 # _Sample project_
 
 (See the README.md file in the upper level 'examples' directory for more information about examples.)

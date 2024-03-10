@@ -65,6 +65,9 @@ void Application::init() {
     // LEDコントローラー
     m_led.init();
 
+    // サーボコントローラー
+    m_servo.init(CONFIG_SERVO_PIN, 0);
+
     // SDカード初期化
     m_sd_card.init(ROOT);
     m_sd_card.setMountCallback(mountFunc, this);
@@ -79,6 +82,7 @@ void Application::init() {
     m_web.init();
     m_web.addHandler(HTTP_GET, "get_led", getLed, this);
     m_web.addHandler(HTTP_POST, "set_led", setLed, this);
+    m_web.setWebSocketHandler(sebSocketFunc, this);
 
     ESP_LOGI(TAG, "Init(E)");
 }
@@ -296,6 +300,15 @@ void Application::setLed(httpd_req_t *req, void* context) {
     cJSON_Delete(json);
     pThis->m_led.setLed(ledData);
     httpd_resp_send(req, NULL, 0);
+}
+
+// WebSocketコールバック
+char* Application::sebSocketFunc(const char* data, void* context) {
+    Application* pThis = (Application*)context;
+    std::string str = data;
+    int angle = std::stod(str);
+    pThis->m_servo.setAngle(angle);
+    return NULL;
 }
 
 extern "C" void app_main(void)
