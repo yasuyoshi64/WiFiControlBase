@@ -1,4 +1,4 @@
-# settings
+# sdkconfig
 Serial flasher config
 
 	Flash size				4MB
@@ -57,6 +57,29 @@ Enable built-in fonts
 3rd Party Libraries
 
 	QR code library			TRUE
+
+# 機能
+
+## SDカードの内容
+
+### ./config
+
+```
+ssid=[Wi-Fi SSID]
+pass=[Wi-Fi Password]
+```
+
+### ./document
+
+ここにはWeb用のファイルを格納します。
+
+## 使い方
+
+* 「No file」と表示されている場合はSDカードを挿入します。
+* 「Wi-Fi Connecting」はWi-Fi接続中です。
+* Wi-Fi接続完了後はQRコードが表示されます。QRコードを読み込むとWebのURLが読み込まれ、documentのWebが表示されます。
+* QRコードは30秒で消灯します。GPIO0のボタンを押下すると再度30秒表示されます。
+* SDカードは電源ON中でも抜き差し可能です。
 
 
 # _Sample project_
