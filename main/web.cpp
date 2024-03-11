@@ -120,8 +120,8 @@ esp_err_t WebServer::get_api(httpd_req_t *req) {
     for(int i=0; i<pThis->m_apiCallbacks.size(); i++) {
         ST_API_CALLBACK_DATA* v = pThis->m_apiCallbacks[i];
         if (v != NULL) {
-            ESP_LOGI(TAG, "API setting path=%s", v->path.c_str());
             if (req->method == v->method && path == v->path) {
+                ESP_LOGI(TAG, "API Call path=%s", v->path.c_str());
                 v->callback(req, v->context);
                 isCall = true;
                 break;

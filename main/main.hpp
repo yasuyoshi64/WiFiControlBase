@@ -12,6 +12,7 @@
 #include "web.hpp"
 #include "led.hpp"
 #include "servo.hpp"
+#include "save_data.hpp"
 
 class Application {
     public:
@@ -33,6 +34,9 @@ class Application {
         static void timer30secFunc(TimerHandle_t xTimer);
         static void btn0HandlerFunc(void* context);
         // Webコールバック
+        static void getData(httpd_req_t *req, void* context);
+        static void setData(httpd_req_t *req, void* context);
+        static void save(httpd_req_t *req, void* context);
         static void getLed(httpd_req_t *req, void* context);
         static void setLed(httpd_req_t *req, void* context);
         // WebSocketコールバック
@@ -53,6 +57,7 @@ class Application {
         WebServer m_web;    // Webサーバー
         Led m_led;          // Ledコントローラー
         Servo m_servo;      // サーボコントローラー
+        SaveData m_save_data;   // データ保存
         std::map<std::string, std::string> m_configMap{};     // CONFIG
         bool m_isWiFi;
         bool m_30sec_off;

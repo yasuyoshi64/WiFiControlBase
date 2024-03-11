@@ -62,15 +62,19 @@ void Application::init() {
     // メッセージキューの初期化
     m_xQueue = xQueueCreate(10, sizeof(AppMessage));
 
+    // SDカード初期化
+    m_sd_card.init(ROOT);
+    m_sd_card.setMountCallback(mountFunc, this);
+
+    // データ読み込み
+    m_save_data.init(ROOT);
+    m_save_data.read();
+
     // LEDコントローラー
     m_led.init();
 
     // サーボコントローラー
     m_servo.init(CONFIG_SERVO_PIN, 0);
-
-    // SDカード初期化
-    m_sd_card.init(ROOT);
-    m_sd_card.setMountCallback(mountFunc, this);
 
     // OLED(SSD1306)ディスプレイ初期化
     m_oled.init(dispInitCompFunc, this);
@@ -80,6 +84,9 @@ void Application::init() {
 
     // Webサーバー初期化
     m_web.init();
+    m_web.addHandler(HTTP_GET, "get_data", getData, this);
+    m_web.addHandler(HTTP_POST, "set_data", setData, this);
+    m_web.addHandler(HTTP_POST, "save", save, this);
     m_web.addHandler(HTTP_GET, "get_led", getLed, this);
     m_web.addHandler(HTTP_POST, "set_led", setLed, this);
     m_web.setWebSocketHandler(sebSocketFunc, this);
@@ -239,6 +246,73 @@ void Application::wifiConnection() {
 void Application::wifiDisconnection() {
     m_web.stop();
     m_wifi.disconnect();
+}
+
+// WebAPI GET /API/get_data
+// {
+//   "ip_address": "192.168.0.1",
+//   "servo_trim": "5"
+// }
+void Application::getData(httpd_req_t *req, void* context) {
+    ESP_LOGI(TAG, "getData");
+    Application* pThis = (Application*)context;
+    char resp[100];
+    const char* ip_address = pThis->m_wifi.getIPAddress();
+    const char* servo_trim = pThis->m_save_data.get("servo_trim");
+    ip_address = ip_address == NULL ? "" : ip_address;
+    servo_trim = servo_trim == NULL ? "0" : servo_trim;
+    sprintf(resp, "{\"ip_address\": \"%s\", \"servo_trim\": %s}", ip_address, servo_trim);
+    ESP_LOGI(TAG, "%s", resp);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, resp, strlen(resp));
+}
+
+// WebAPI POST /API/set_data
+// {
+//   "servo_trim": 5
+// }
+void Application::setData(httpd_req_t *req, void* context) {
+    ESP_LOGI(TAG, "setData");
+    Application* pThis = (Application*)context;
+    int ret, remaining = req->content_len;
+    char body[100];
+    if (remaining >= sizeof(body)) {
+        ESP_LOGE(TAG, "oversize request body");
+        httpd_resp_send_500(req);
+        return;
+    }
+    ret = httpd_req_recv(req, body, remaining);
+    if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+        ESP_LOGE(TAG, "timeout");
+        httpd_resp_send_408(req);
+        return;
+    }
+    body[ret] = '\0';
+    ESP_LOGI(TAG, "body : %s", body);
+    cJSON* json = cJSON_Parse(body);
+    if (json == NULL) {
+        ESP_LOGI(TAG, "json null");
+        httpd_resp_send_500(req);
+        return;
+    }
+    cJSON* servo_trim = cJSON_GetObjectItemCaseSensitive(json, "servo_trim");
+    if (!cJSON_IsNumber(servo_trim)) {
+        ESP_LOGI(TAG, "json format error");
+        httpd_resp_send_500(req);
+        return;
+    }
+    double trim = cJSON_GetNumberValue(servo_trim);
+    pThis->m_save_data.set("servo_trim", std::to_string(trim).c_str());
+    cJSON_Delete(json);
+    httpd_resp_send(req, NULL, 0);
+}
+
+// WebAPI POST /API/save
+void Application::save(httpd_req_t *req, void* context) {
+    ESP_LOGI(TAG, "save");
+    Application* pThis = (Application*)context;
+    pThis->m_save_data.save();
+    httpd_resp_send(req, NULL, 0);
 }
 
 // WebAPI GET /API/get_led
