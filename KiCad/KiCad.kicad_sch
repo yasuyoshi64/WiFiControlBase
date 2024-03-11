@@ -1139,7 +1139,7 @@
     (pin "2" (uuid 9e062f9a-cf5c-48a4-a0eb-d115a66866ec))
     (pin "1" (uuid f429323f-104e-41dc-af44-7b82d388c13d))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "D1") (unit 1)
         )
@@ -1173,7 +1173,7 @@
     (pin "2" (uuid 5e2c04a9-7fce-428e-b1e5-c0e326e17472))
     (pin "1" (uuid 17b8d65d-7a5d-4b2a-8922-b33fa903daba))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "U2") (unit 1)
         )
@@ -1201,7 +1201,7 @@
     (pin "3" (uuid 7e534a08-c1b2-453a-a13d-8599395cd2a3))
     (pin "2" (uuid 156995f5-ec71-4086-b80f-94895ac6da53))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "Brd1") (unit 1)
         )
@@ -1226,7 +1226,7 @@
     )
     (pin "1" (uuid 44837cc8-5fbe-49c2-ba03-586b967b72e6))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "#FLG03") (unit 1)
         )
@@ -1252,7 +1252,7 @@
     (pin "1" (uuid afbb9689-f055-4e56-b115-574481f8ab7a))
     (pin "2" (uuid f6e5a3ac-cd7f-4866-aecc-52ef68064c38))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "D2") (unit 1)
         )
@@ -1278,7 +1278,7 @@
     (pin "2" (uuid 2a1d30e5-8e5a-4c5b-8c11-b98425322bf7))
     (pin "1" (uuid 0d8036fa-c239-4111-81f7-61c916136a44))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "R1") (unit 1)
         )
@@ -1305,7 +1305,7 @@
     (pin "2" (uuid 54bae04e-9aa8-405b-8373-b9492d896986))
     (pin "3" (uuid 4ed7ac96-4e1c-4ebb-b733-8b4b5ad73336))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "M1") (unit 1)
         )
@@ -1331,7 +1331,7 @@
     (pin "1" (uuid ba22e872-12c1-4f21-bded-aa4a902561dd))
     (pin "2" (uuid 652f4501-ce26-4f09-ad5e-12ae6ef94d7a))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "R4") (unit 1)
         )
@@ -1357,7 +1357,7 @@
     (pin "1" (uuid 77ad674e-6c3d-4abd-871f-053e3ac8491f))
     (pin "2" (uuid 7c975530-96e0-4579-88c3-6d401d87fc4c))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "D5") (unit 1)
         )
@@ -1383,7 +1383,7 @@
     (pin "1" (uuid 5506c590-2c30-4eef-8be7-ab145ee515e9))
     (pin "2" (uuid cfcf4f76-49a8-43c6-8172-f2f34c20c967))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "R7") (unit 1)
         )
@@ -1408,7 +1408,7 @@
     )
     (pin "1" (uuid 3daa8cb3-ad5e-4bd0-99cf-7efa895d1e6d))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "#PWR01") (unit 1)
         )
@@ -1433,7 +1433,7 @@
     )
     (pin "1" (uuid cc9ae52f-f772-4129-ab47-0ff219a7d28c))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "#FLG01") (unit 1)
         )
@@ -1459,7 +1459,7 @@
     (pin "2" (uuid 49e0212d-376a-4fa1-8e27-4b411c36b3d0))
     (pin "1" (uuid 35e1e4c3-6378-4db2-9ce3-c6c402fe7f0d))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "R3") (unit 1)
         )
@@ -1485,7 +1485,7 @@
     (pin "1" (uuid 71eaedee-4e17-4ae3-92b9-e1bbdb33b8df))
     (pin "2" (uuid 286a38b1-2ac9-424e-b999-3a1bd03a004d))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "R6") (unit 1)
         )
@@ -1511,7 +1511,7 @@
     (pin "2" (uuid 8f1a619f-a564-4b99-883f-4034f1f6adf3))
     (pin "1" (uuid 47944b9f-ea9e-49d3-8bd9-7a46402caacb))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "R5") (unit 1)
         )
@@ -1536,7 +1536,7 @@
     )
     (pin "1" (uuid ce3734ba-e3f7-4712-879a-16c0b76c8762))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "#FLG02") (unit 1)
         )
@@ -1562,7 +1562,7 @@
     (pin "1" (uuid 17af159e-e9a6-46a0-acd7-2f297cfa6ff4))
     (pin "2" (uuid a0e743ba-699f-4b09-89c1-9a02c463e105))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "R2") (unit 1)
         )
@@ -1588,7 +1588,7 @@
     (pin "2" (uuid 7b51e38c-946b-4480-a5b0-72cbca813d3e))
     (pin "1" (uuid 295ab82e-7af5-44a8-96c4-ea414963f7f2))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "D3") (unit 1)
         )
@@ -1614,7 +1614,7 @@
     (pin "2" (uuid 237da03e-b2fe-467d-add5-5d9d7b75360d))
     (pin "1" (uuid f98e6f9f-7f44-419e-959d-20e000fe43e4))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "D4") (unit 1)
         )
@@ -1709,7 +1709,7 @@
     (pin "20" (uuid 6ad455ca-ec0d-4e79-ba7e-9a61fc29c4c8))
     (pin "9" (uuid 95a56410-7c21-42ba-93b5-716611c43b71))
     (instances
-      (project "WiFiControlBase"
+      (project "KiCad"
         (path "/28eb5f93-2bb7-4567-b967-2c6d735f7fb9"
           (reference "U1") (unit 1)
         )
