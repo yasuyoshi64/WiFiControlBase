@@ -1,6 +1,8 @@
 #include "save_data.hpp"
 #include "esp_log.h"
 
+#define TAG "SaveData"
+
 #define SAVE_FILE "/save"
 
 SaveData::SaveData() {
@@ -36,6 +38,7 @@ void SaveData::read() {
                     key = szLine;
                 } else {
                     value = szLine;
+                    ESP_LOGI(TAG, "key=%s, value=%s", key.c_str(), value.c_str());
                     m_saveDataMap.insert(std::make_pair(key, value));
                 }
                 len = 0;

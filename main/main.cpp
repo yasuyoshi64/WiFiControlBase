@@ -66,9 +66,8 @@ void Application::init() {
     m_sd_card.init(ROOT);
     m_sd_card.setMountCallback(mountFunc, this);
 
-    // データ読み込み
+    // 保存データ初期化
     m_save_data.init(ROOT);
-    m_save_data.read();
 
     // LEDコントローラー
     m_led.init();
@@ -142,6 +141,11 @@ void Application::mountFunc(bool isMount, void* context) {
         AppMessage msg = AppMessage::WIFIDisconnection;
         xQueueSend(pThis->m_xQueue, &msg, portMAX_DELAY);
     }
+    // 保存データ読み込み
+    pThis->m_save_data.read();
+    // サーボトリム
+    const char* trim = pThis->m_save_data.get("servo_trim");
+    pThis->m_servo.setAngle(std::stod(trim == NULL ? "0" : trim));
 }
 
 // ファイル一覧コールバック
