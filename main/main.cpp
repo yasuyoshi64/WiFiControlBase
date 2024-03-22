@@ -13,6 +13,8 @@
 #include "driver/gpio.h"
 #include "esp_http_server.h"
 #include "cJSON.h"
+#include "esp_chip_info.h"
+#include "esp_flash.h"
 #include "esp_log.h"
 
 #include "main.hpp"
@@ -69,12 +71,6 @@ void Application::init() {
     // 保存データ初期化
     m_save_data.init(ROOT);
 
-    // LEDコントローラー
-    m_led.init();
-
-    // サーボコントローラー
-    m_servo.init(CONFIG_SERVO_PIN, 0);
-
     // OLED(SSD1306)ディスプレイ初期化
     m_oled.init(dispInitCompFunc, this);
 
@@ -86,8 +82,6 @@ void Application::init() {
     m_web.addHandler(HTTP_GET, "get_data", getData, this);
     m_web.addHandler(HTTP_POST, "set_data", setData, this);
     m_web.addHandler(HTTP_POST, "save", save, this);
-    m_web.addHandler(HTTP_GET, "get_led", getLed, this);
-    m_web.addHandler(HTTP_POST, "set_led", setLed, this);
     m_web.setWebSocketHandler(sebSocketFunc, this);
 
     ESP_LOGI(TAG, "Init(E)");
@@ -143,9 +137,6 @@ void Application::mountFunc(bool isMount, void* context) {
     }
     // 保存データ読み込み
     pThis->m_save_data.read();
-    // サーボトリム
-    const char* trim = pThis->m_save_data.get("servo_trim");
-    pThis->m_servo.setAngle(std::stod(trim == NULL ? "0" : trim));
 }
 
 // ファイル一覧コールバック
@@ -199,9 +190,11 @@ void Application::timer30secStart() {
 // 30秒タイマ
 void Application::timer30secFunc(TimerHandle_t xTimer) {
     Application* pThis = (Application*)pvTimerGetTimerID(xTimer);
-    pThis->m_30sec_off = false;
-    AppMessage msg = AppMessage::UpdateDisplay;
-    xQueueSend(pThis->m_xQueue, &msg, portMAX_DELAY);
+    if (pThis->m_30sec_off == true) {
+        pThis->m_30sec_off = false;
+        AppMessage msg = AppMessage::UpdateDisplay;
+        xQueueSend(pThis->m_xQueue, &msg, portMAX_DELAY);
+    }
 }
 
 // 基盤上のボタン押下ハンドラ (GPIO0)
@@ -255,17 +248,48 @@ void Application::wifiDisconnection() {
 // WebAPI GET /API/get_data
 // {
 //   "ip_address": "192.168.0.1",
-//   "servo_trim": "5"
+//   "target": "ESP32",
+//   "cores": 2,
+//   "chip": "WiFi/BT",
+//   "revision": "v1.1"
+//   "flash": 4,
+//   "memo": "abcdefg"
 // }
 void Application::getData(httpd_req_t *req, void* context) {
     ESP_LOGI(TAG, "getData");
     Application* pThis = (Application*)context;
-    char resp[100];
+    char resp[256];
     const char* ip_address = pThis->m_wifi.getIPAddress();
-    const char* servo_trim = pThis->m_save_data.get("servo_trim");
     ip_address = ip_address == NULL ? "" : ip_address;
-    servo_trim = servo_trim == NULL ? "0" : servo_trim;
-    sprintf(resp, "{\"ip_address\": \"%s\", \"servo_trim\": %s}", ip_address, servo_trim);
+    esp_chip_info_t chip_info;
+    esp_chip_info(&chip_info);
+    unsigned major_rev = chip_info.revision / 100;
+    unsigned minor_rev = chip_info.revision % 100;
+    uint32_t flash_size;
+    esp_flash_get_size(NULL, &flash_size);
+    const char* memo = pThis->m_save_data.get("memo");
+    memo = memo == NULL ? "" : memo;
+    std::string format = R"({
+        "ip_address": "%s",
+        "target": "%s",
+        "cores": %d,
+        "chip": "%s%s%s%s",
+        "revision": "v%d.%d",
+        "flash": %d,
+        "memo": "%s"
+    })";
+    sprintf(resp, format.c_str(), 
+        ip_address,
+        CONFIG_IDF_TARGET,
+        chip_info.cores,
+        (chip_info.features & CHIP_FEATURE_WIFI_BGN) ? "WiFi/" : "",
+        (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
+        (chip_info.features & CHIP_FEATURE_BLE) ? "BLE" : "",
+        (chip_info.features & CHIP_FEATURE_IEEE802154) ? ", 802.15.4 (Zigbee/Thread)" : "",
+        major_rev, minor_rev, 
+        flash_size,
+        memo
+    );
     ESP_LOGI(TAG, "%s", resp);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, resp, strlen(resp));
@@ -273,7 +297,7 @@ void Application::getData(httpd_req_t *req, void* context) {
 
 // WebAPI POST /API/set_data
 // {
-//   "servo_trim": 5
+//    memo: "abcdefg"
 // }
 void Application::setData(httpd_req_t *req, void* context) {
     ESP_LOGI(TAG, "setData");
@@ -299,14 +323,14 @@ void Application::setData(httpd_req_t *req, void* context) {
         httpd_resp_send_500(req);
         return;
     }
-    cJSON* servo_trim = cJSON_GetObjectItemCaseSensitive(json, "servo_trim");
-    if (!cJSON_IsNumber(servo_trim)) {
+    cJSON* memo = cJSON_GetObjectItemCaseSensitive(json, "memo");
+    if (!cJSON_IsString(memo)) {
         ESP_LOGI(TAG, "json format error");
         httpd_resp_send_500(req);
         return;
     }
-    double trim = cJSON_GetNumberValue(servo_trim);
-    pThis->m_save_data.set("servo_trim", std::to_string(trim).c_str());
+    std::string memo_value = cJSON_GetStringValue(memo);
+    pThis->m_save_data.set("memo", memo_value.c_str());
     cJSON_Delete(json);
     httpd_resp_send(req, NULL, 0);
 }
@@ -319,73 +343,8 @@ void Application::save(httpd_req_t *req, void* context) {
     httpd_resp_send(req, NULL, 0);
 }
 
-// WebAPI GET /API/get_led
-void Application::getLed(httpd_req_t *req, void* context) {
-    ESP_LOGI(TAG, "getLed");
-    Application* pThis = (Application*)context;
-    bool* led = pThis->m_led.getLed();
-    char resp[100];
-    sprintf(resp, "{\"led\": [ %s, %s, %s, %s ] }", led[0] ? "true" : "false", led[1] ? "true" : "false", led[2] ? "true" : "false", led[3] ? "true" : "false");
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, resp, strlen(resp));
-}
-
-// WebAPI POST /API/set_led
-// body : 
-//  {
-//      "led": [ true, true, true, true ]
-//  }
-void Application::setLed(httpd_req_t *req, void* context) {
-    ESP_LOGI(TAG, "setLed");
-    Application* pThis = (Application*)context;
-    int ret, remaining = req->content_len;
-    char body[100];
-    if (remaining >= sizeof(body)) {
-        ESP_LOGE(TAG, "oversize request body");
-        httpd_resp_send_500(req);
-        return;
-    }
-    ret = httpd_req_recv(req, body, remaining);
-    if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-        ESP_LOGE(TAG, "timeout");
-        httpd_resp_send_408(req);
-        return;
-    }
-    body[ret] = '\0';
-    ESP_LOGI(TAG, "body : %s", body);
-    cJSON* json = cJSON_Parse(body);
-    if (json == NULL) {
-        ESP_LOGI(TAG, "json null");
-        httpd_resp_send_500(req);
-        return;
-    }
-    cJSON* leds = cJSON_GetObjectItemCaseSensitive(json, "led");
-    if (!cJSON_IsArray(leds)) {
-        ESP_LOGI(TAG, "json format error");
-        httpd_resp_send_500(req);
-        return;
-    }
-    cJSON* led = NULL;
-    bool ledData[4];
-    int i=0;
-    cJSON_ArrayForEach(led, leds) {
-        if (cJSON_IsTrue(led))
-            ledData[i] = true;
-        else
-            ledData[i] = false;
-        i++;
-    }
-    cJSON_Delete(json);
-    pThis->m_led.setLed(ledData);
-    httpd_resp_send(req, NULL, 0);
-}
-
 // WebSocketコールバック
 char* Application::sebSocketFunc(const char* data, void* context) {
-    Application* pThis = (Application*)context;
-    std::string str = data;
-    int angle = std::stod(str);
-    pThis->m_servo.setAngle(angle);
     return NULL;
 }
 

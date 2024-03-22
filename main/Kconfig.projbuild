@@ -3,30 +3,6 @@ menu "WiFiControlBase"
         int "LED GPIO number"
         default 5
 
-    menu "LED controle conf"
-        config LED1_PIN
-            int "LED1 GPIO number"
-            default 26
-
-        config LED2_PIN
-            int "LED2 GPIO number"
-            default 27
-
-        config LED3_PIN
-            int "LED3 GPIO number"
-            default 32
-
-        config LED4_PIN
-            int "LED4 GPIO number"
-            default 33
-    endmenu
-
-    menu "Servo controle conf"
-        config SERVO_PIN
-            int "Servo GPIO number"
-            default 12
-    endmenu
-
     menu "SD card PIN configuration"
     
         config MOSI_PIN
