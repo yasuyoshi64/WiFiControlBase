@@ -11,17 +11,6 @@ WiFiControlBase
 
 	LED GPIO number			5
 
-LED controle conf
-
-	LED1 GPIO number		26
-	LED2 GPIO number		27
-	LED3 GPIO number		32
-	LED4 GPIO number		33
-
-Servo controle conf
-
-	Servo GPIO number		12
-
 SD card PIN configuration
 
 	MOSI GPIO number		17
