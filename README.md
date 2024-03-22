@@ -70,6 +70,17 @@ pass=[Wi-Fi Password]
 * QRコードは30秒で消灯します。GPIO0のボタンを押下すると再度30秒表示されます。
 * SDカードは電源ON中でも抜き差し可能です。
 
+## 回路図
+
+![回路図](https://github.com/yasuyoshi64/WiFiControlBase/blob/main/WiFiControlBase.png?raw=true)
+
+## Web画面
+
+![Web画面](https://github.com/yasuyoshi64/WiFiControlBase/blob/main/WiFiControlBaseWeb.png?raw=true)
+
+ロード時にIPアドレスやチップ情報などを読み込み。
+メモを入力してSaveボタンをクリックするとSDカードのsaveファイルに格納されます。
+メモは再ロード時に読み込まれます。
 
 # _Sample project_
 
